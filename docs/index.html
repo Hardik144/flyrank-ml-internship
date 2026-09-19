@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Capstone Report — Refresh / Content Opportunity Scoring</title>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #f4f6f8; color: #1f2937; font: 16px/1.7 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+main { max-width: 920px; margin: 40px auto; padding: 48px clamp(20px, 6vw, 64px); background: #fff; border-radius: 14px; box-shadow: 0 8px 32px rgba(15,23,42,.08); }
+h1 { font-size: clamp(2rem, 5vw, 2.8rem); line-height: 1.2; letter-spacing: -.03em; margin-top: 0; }
+h2 { margin-top: 2.4em; padding-bottom: .35em; border-bottom: 1px solid #e5e7eb; font-size: 1.55rem; }
+h3 { margin-top: 1.6em; }
+a { color: #b45309; overflow-wrap: anywhere; }
+code { background: #f3f4f6; padding: .15em .35em; border-radius: 4px; font-size: .92em; }
+blockquote { margin: 1.5em 0; padding: .8em 1em; border-left: 4px solid #d97706; background: #fffbeb; }
+.table-wrap { overflow-x: auto; margin: 1.2em 0; }
+table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+th, td { text-align: left; padding: 10px 12px; border: 1px solid #e5e7eb; }
+th { background: #f9fafb; }
+li { margin: .35em 0; }
+footer { text-align: center; color: #6b7280; font-size: .85rem; margin: 24px 0; }
+@media (max-width: 600px) { main { margin: 0; border-radius: 0; padding: 28px 18px; } }
+</style>
+</head>
+<body>
+<main>
+<h1>Capstone Report — Refresh / Content Opportunity Scoring</h1>
+<ul>
+<li><strong>Author:</strong> Hardik Patidar</li>
+<li><strong>Lane:</strong> Refresh / Content Opportunity Scoring</li>
+<li><strong>Repo:</strong> https://github.com/Hardik144/flyrank-ml-internship</li>
+<li><strong>Date:</strong> 2026-09-19</li>
+</ul>
+<blockquote><strong>Lane note:</strong> This lane is selected because it describes the work implemented in the notebook. Confirm it matches the lane assigned by the internship before submitting.</blockquote>
+<h2>0. Abstract</h2>
+<p>This project investigates whether historical content and search-performance indicators can help prioritize pages for human review. The analysis uses the anonymized FlyRank ML Internship content-refresh dataset, which the notebook describes as containing 30,000 records and 44 columns. A transparent heuristic score combines a declining-trend indicator, relative content staleness, below-median click-through rate within content type, and historical visibility. The notebook reports a Spearman rank correlation of approximately 0.175 with the historical-impressions ranking and an overlap of 9 records among the two rankings’ top 100. The output is intended to help human reviewers organize investigations and review work; it is not a validated prediction of future performance or evidence that refreshing content causes improvement.</p>
+<h2>1. Problem framing</h2>
+<p>The project addresses the question: <strong>Can historical content and search-performance signals help identify pages that may merit review?</strong></p>
+<ul>
+<li><strong>Unit of analysis:</strong> A content record/page.</li>
+<li><strong>Output:</strong> A review-priority score, ranking, priority group, and suggested review action.</li>
+<li><strong>Human action:</strong> A reviewer can inspect high-ranked records, investigate the signals contributing to their scores, and decide whether to refresh, improve, monitor, or leave the content unchanged.</li>
+<li><strong>Cost of a wrong call:</strong> A poor ranking could divert reviewer time, delay attention to another page, or prompt an unnecessary content change.</li>
+<li><strong>Why data/ML helps:</strong> A consistent scoring rule can combine several signals and make prioritization easier to inspect. This project uses a heuristic rather than a trained predictive model, so its value is as decision support—not as an automated quality judgment.</li>
+</ul>
+<h2>2. Data safety</h2>
+<p>The analysis uses the anonymized content-refresh dataset provided for the FlyRank ML Internship. The notebook identifies the source file as <code>content_refresh_anonymized.csv</code> and describes the dataset as containing <strong>30,000 rows and 44 columns</strong>.</p>
+<p>Fields discussed in the notebook include:</p>
+<ul>
+<li>Content and client identifiers: <code>content_id</code>, <code>client_id</code></li>
+<li>Search characteristics: <code>search_volume</code>, <code>competition</code>, <code>competition_level</code>, <code>main_intent</code></li>
+<li>Content characteristics: <code>content_type</code>, <code>word_count</code>, <code>char_count</code></li>
+<li>Search-performance metrics: <code>impressions_90d</code>, <code>clicks_90d</code></li>
+<li>Engagement-related fields, including pageviews and sessions</li>
+<li>Other fields used by the scoring process, including <code>ctr</code>, <code>days_since_last_update</code>, and <code>trend_direction</code></li>
+</ul>
+<p>Identifiers such as <code>content_id</code> and <code>client_id</code> are for record grouping or internal reference only; they are not scoring features and must not be used to identify clients. No client names, domains, URLs, private queries, credentials, or raw exports should appear in the public paper or public artifacts.</p>
+<p>The notebook notes that the exact date range and underlying warehouse release/table names have not been verified. Do not add those details unless they can be confirmed from the supplied documentation.</p>
+<p>The analysis uses <code>trend_direction</code> as an explicit component of the heuristic, not as an independently verified future outcome label. The report therefore makes no claim of causal impact or validated future prediction.</p>
+<h2>3. Baseline</h2>
+<p>The baseline ranks records by descending <code>impressions_90d</code>, placing records with more historical impressions first.</p>
+<p>This is a transparent, easy-to-reproduce historical-visibility rule. It is a useful point of comparison because it differs from the proposed score, which combines trend, staleness, CTR, and visibility signals. Both rankings should be computed on the same set of records.</p>
+<p>The baseline is not a trained model and does not measure future content performance.</p>
+<h2>4. Model / analysis</h2>
+<p>The project uses a manually weighted heuristic score, not a supervised machine-learning model.</p>
+<p>The score combines these components:</p>
+<ul>
+<li><strong>Declining signal (40%):</strong> 1 when <code>trend_direction</code> is <code>&quot;down&quot;</code>, otherwise 0.</li>
+<li><strong>Staleness (30%):</strong> The percentile rank of <code>days_since_last_update</code>; relatively older records receive a higher value.</li>
+<li><strong>Low CTR (20%):</strong> 1 when the record’s <code>ctr</code> is below the median CTR for its <code>content_type</code>, otherwise 0.</li>
+<li><strong>Visibility (10%):</strong> The percentile rank of <code>log1p(impressions_90d)</code>.</li>
+</ul>
+<p>The combined score is:</p>
+<p><code>review_priority_score = 100 × (0.40 × declining_signal + 0.30 × staleness_score + 0.20 × low_ctr_signal + 0.10 × visibility_score)</code></p>
+<p>Records are ranked by descending score. Priority groups use score cutoffs of 40, 60, and 80, consistent with the corrected grouping thresholds in the notebook.</p>
+<p>There is no independently verified target label for successful refreshes in this analysis. The score is therefore a heuristic ranking for review, not a prediction of whether a page will improve.</p>
+<h2>5. Evaluation</h2>
+<p>The notebook compares the heuristic ranking with the historical-impressions baseline over the same records. It also checks ranking stability under alternative weight configurations.</p>
+<h3>Reported ranking comparison</h3>
+<ul>
+<li><strong>Records analyzed:</strong> 30,000</li>
+<li><strong>Spearman rank correlation with the impressions baseline:</strong> approximately 0.175</li>
+<li><strong>Top-100 overlap:</strong> 9 records (9%)</li>
+</ul>
+<p>These are descriptive ranking-comparison results. The low overlap indicates that the two rules produce different top-ranked lists; it does not establish that either list is more accurate or useful.</p>
+<h3>Sensitivity analysis</h3>
+<p>The notebook reports the following comparisons of alternative weighting configurations against the original ranking:</p>
+<div class='table-wrap'><table>
+<thead><tr><th>Alternative configuration</th><th>Top-100 overlap with original</th><th>Spearman correlation with original</th></tr></thead><tbody>
+<tr><td>Decline-focused</td><td>92%</td><td>0.9973</td></tr>
+<tr><td>Freshness-focused</td><td>89%</td><td>0.9781</td></tr>
+<tr><td>CTR-focused</td><td>92%</td><td>0.9221</td></tr>
+</tbody></table></div>
+<p>These figures describe how much the ranking changes under the tested weight variations. They do not prove that the original weights are optimal.</p>
+<h3>Evaluation limitations</h3>
+<p>The notebook does not report a supervised train/test split, predictive accuracy, AUC, or lift against an independently verified outcome. Those metrics are not applicable to the current heuristic without a suitable outcome label and evaluation design. Do not describe this as a sealed holdout evaluation.</p>
+<h2>6. Interpretation</h2>
+<p>The notebook reports the following priority-group summary:</p>
+<div class='table-wrap'><table>
+<thead><tr><th>Priority group</th><th>Records</th><th>Average score</th></tr></thead><tbody>
+<tr><td>Low priority</td><td>10,946</td><td>23.061</td></tr>
+<tr><td>Moderate priority</td><td>7,643</td><td>51.229</td></tr>
+<tr><td>High priority</td><td>7,701</td><td>71.167</td></tr>
+<tr><td>Very high priority</td><td>3,710</td><td>88.395</td></tr>
+</tbody></table></div>
+<p>The reported declining-signal share is 1.0 in both the high- and very-high-priority groups. The very-high-priority group also has a low-CTR share of 1.0 and an average staleness component of approximately 0.783.</p>
+<p>These characteristics are partly expected because the same signals are used to construct the score. They are not independent evidence that the pages are low quality or that updating them will improve performance.</p>
+<p>The heuristic and impressions baseline have limited top-100 overlap, so the heuristic does not simply reproduce the historical-impressions ordering.</p>
+<h2>7. Recommendation</h2>
+<p>Use the ranking as a review queue while keeping decisions with human editors.</p>
+<ol>
+<li><strong>Very-high-priority records:</strong> Review early. Investigate declining trends, relative CTR, and freshness before deciding whether a change is justified.</li>
+<li><strong>High-priority records:</strong> Inspect the score components and assess whether content accuracy, relevance, structure, or presentation needs attention.</li>
+<li><strong>Moderate-priority records:</strong> Schedule routine review and monitor for meaningful changes.</li>
+<li><strong>Low-priority records:</strong> Continue ordinary monitoring and revisit when new signals or business needs arise.</li>
+</ol>
+<p>The notebook’s action playbook includes investigating declining performance, reviewing freshness, examining titles and search intent where CTR is relatively low, and examining high-visibility content.</p>
+<p><strong>Confidence and limits:</strong> The output supports prioritization and investigation only. It does not guarantee future performance, establish business impact, or show that a content change causes improvement. Reviewers should verify the underlying evidence before acting.</p>
+<h2>8. Reproducibility</h2>
+<ul>
+<li><strong>Repository:</strong> https://github.com/Hardik144/flyrank-ml-internship</li>
+<li><strong>Notebook:</strong> <code>work/notebooks/capstone.ipynb</code></li>
+<li><strong>Input filename identified in the notebook:</strong> <code>content_refresh_anonymized.csv</code></li>
+</ul>
+<p>The notebook uses Python data-analysis and plotting tools, including Pandas, NumPy, and Matplotlib. It includes code for generating rankings, summary tables, visualizations, and exported artifacts.</p>
+<p>To reproduce the analysis, clone the repository, follow the project’s documented environment and dataset instructions, make the authorized anonymized dataset available at the expected path, and run the notebook from top to bottom.</p>
+<p>Before submission, rerun the notebook and confirm that the outputs match the figures reported here and that the intended artifacts are present in the repository. Exact dependency versions, random seeds, and any required setup commands should be recorded from the actual environment rather than guessed.</p>
+<p>This project does not claim a sealed or blind holdout evaluation. No such claim should be made unless the repository contains both the script/cell that constructs the sealed frame and the resulting metrics file.</p>
+<h2>9. Acknowledgments &amp; data credit</h2>
+<p>I acknowledge FlyRank for providing the opportunity to complete this capstone project and for providing the anonymized dataset used in the analysis.</p>
+<p>Built on the <a href="https://flyrank.ai" target="_blank" rel="noopener noreferrer">FlyRank ML Internship dataset</a>.</p>
+</main>
+<footer>Research capstone · FlyRank ML Internship</footer>
+</body>
+</html>
